@@ -19,7 +19,7 @@ export const isHTMLTag = makeMap(
   'button,datalist,fieldset,form,input,label,legend,meter,optgroup,option,' +
   'output,progress,select,textarea,' +
   'details,dialog,menu,menuitem,summary,' +
-  'content,element,shadow,template'
+  'content,element,shadow,template,blockquote,iframe,tfoot'
 )
 
 // this map is intentionally selective, only covering SVG elements that may
@@ -73,3 +73,5 @@ export function isUnknownElement (tag: string): boolean {
     return (unknownElementCache[tag] = /HTMLUnknownElement/.test(el.toString()))
   }
 }
+
+export const isTextInputType = makeMap('text,number,password,search,email,tel,url')

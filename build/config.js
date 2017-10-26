@@ -1,7 +1,9 @@
 const path = require('path')
 const buble = require('rollup-plugin-buble')
 const alias = require('rollup-plugin-alias')
+const cjs = require('rollup-plugin-commonjs')
 const replace = require('rollup-plugin-replace')
+const node = require('rollup-plugin-node-resolve')
 const flow = require('rollup-plugin-flow-no-whitespace')
 const version = process.env.VERSION || require('../package.json').version
 const weexVersion = process.env.WEEX_VERSION || require('../packages/weex-vue-framework/package.json').version
@@ -15,7 +17,7 @@ const banner =
 
 const weexFactoryPlugin = {
   intro () {
-    return 'module.exports = function weexFactory (exports, renderer) {'
+    return 'module.exports = function weexFactory (exports, document) {'
   },
   outro () {
     return '}'
@@ -105,12 +107,29 @@ const builds = {
     format: 'cjs',
     external: Object.keys(require('../packages/vue-template-compiler/package.json').dependencies)
   },
+  // Web compiler (UMD for in-browser use).
+  'web-compiler-browser': {
+    entry: resolve('web/entry-compiler.js'),
+    dest: resolve('packages/vue-template-compiler/browser.js'),
+    format: 'umd',
+    env: 'development',
+    moduleName: 'VueTemplateCompiler',
+    plugins: [node(), cjs()]
+  },
   // Web server renderer (CommonJS).
   'web-server-renderer': {
     entry: resolve('web/entry-server-renderer.js'),
     dest: resolve('packages/vue-server-renderer/build.js'),
     format: 'cjs',
     external: Object.keys(require('../packages/vue-server-renderer/package.json').dependencies)
+  },
+  'web-server-basic-renderer': {
+    entry: resolve('web/entry-server-basic-renderer.js'),
+    dest: resolve('packages/vue-server-renderer/basic.js'),
+    format: 'umd',
+    env: 'development',
+    moduleName: 'renderVueComponentToString',
+    plugins: [node(), cjs()]
   },
   'web-server-renderer-webpack-server-plugin': {
     entry: resolve('server/webpack-plugin/server.js'),
@@ -149,14 +168,11 @@ const builds = {
   }
 }
 
-function genConfig (opts) {
+function genConfig (name) {
+  const opts = builds[name]
   const config = {
-    entry: opts.entry,
-    dest: opts.dest,
+    input: opts.entry,
     external: opts.external,
-    format: opts.format,
-    banner: opts.banner,
-    moduleName: 'Vue',
     plugins: [
       replace({
         __WEEX__: !!opts.weex,
@@ -166,7 +182,13 @@ function genConfig (opts) {
       flow(),
       buble(),
       alias(Object.assign({}, aliases, opts.alias))
-    ].concat(opts.plugins || [])
+    ].concat(opts.plugins || []),
+    output: {
+      file: opts.dest,
+      format: opts.format,
+      banner: opts.banner,
+      name: opts.moduleName || 'Vue'
+    }
   }
 
   if (opts.env) {
@@ -175,12 +197,17 @@ function genConfig (opts) {
     }))
   }
 
+  Object.defineProperty(config, '_name', {
+    enumerable: false,
+    value: name
+  })
+
   return config
 }
 
 if (process.env.TARGET) {
-  module.exports = genConfig(builds[process.env.TARGET])
+  module.exports = genConfig(process.env.TARGET)
 } else {
-  exports.getBuild = name => genConfig(builds[name])
-  exports.getAllBuilds = () => Object.keys(builds).map(name => genConfig(builds[name]))
+  exports.getBuild = genConfig
+  exports.getAllBuilds = () => Object.keys(builds).map(genConfig)
 }
